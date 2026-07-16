@@ -3,8 +3,10 @@
 Bu klasörde Arş. Gör. Tugay KAÇAK ve Doç. Dr. Abdullah Faruk KILIÇ'ın CMEEP26'da sunduğu puanlayıcılar arası uyum katsayılarının karşılaştırıldığı çalışmanın kodları bulunmaktadır.
 
 A Monte Carlo simulation comparing the performance of chance-corrected
-inter-rater agreement coefficients, built on the data-generating process of
-the [`IRRsim`](https://irrsim.bryer.org) package (Bryer). Reporting follows
+inter-rater agreement coefficients, implemented in the
+[`SimDesign`](https://cran.r-project.org/package=SimDesign) framework
+(Chalmers & Adkins, 2020) with the data-generating process of the
+[`IRRsim`](https://irrsim.bryer.org) package (Bryer). Reporting follows
 the simulation template of Siepe et al. (2024) with performance measures and
 Monte Carlo standard errors (MCSE) from Morris, White & Crowther (2019).
 
@@ -69,6 +71,11 @@ report a subject-level-variance test of H0: coefficient = 0 (used for
 power). `Metrics::ScoreQuadraticWeightedKappa` from the v1 script was
 dropped: it estimates the same quantity as `Kappa_quad` but without a test.
 
+Estimation failures are caught *inside* `Analyse()` and returned as `NA`
+rather than thrown, so SimDesign does **not** redraw the data on failure —
+redraws would condition results on estimability and bias the small-sample
+conditions. The NA rate is reported as the convergence rate.
+
 **Performance measures** (per condition × coefficient, with MCSE; S =
 converged replications):
 
@@ -89,9 +96,9 @@ With S = 1000, the worst-case MCSE of a rejection rate is
 ## Repository layout
 
 ```
-R/01_functions.R      DGP wrapper, analytic true values, estimators
-R/02_run_simulation.R Factorial run (parallel, resumable, seeded)
-R/03_summarise.R      Performance measures + MCSEs
+R/01_functions.R      Analytic true values + coefficient estimators
+R/02_run_simulation.R SimDesign Generate/Analyse/Summarise + runSimulation
+R/03_summarise.R      Reshape SimDesign output to a long performance table
 R/04_plots.R          Relative bias / bias / power / Type I figures
 archive/IRR_sim_v1.R  Original draft script (kept for provenance)
 results/, figs/       Generated output (git-ignored)
@@ -100,21 +107,28 @@ results/, figs/       Generated output (git-ignored)
 ## Running
 
 ```r
-install.packages(c("IRRsim", "irr", "irrCAC", "dplyr", "ggplot2", "future.apply"))
-source("R/02_run_simulation.R")  # writes results/conditions/cond_XXXX.rds
+install.packages(c("SimDesign", "IRRsim", "irr", "irrCAC",
+                   "dplyr", "tidyr", "ggplot2"))
+source("R/02_run_simulation.R")  # writes results/irr_simdesign.rds (+ raw-results/)
 source("R/03_summarise.R")       # writes results/performance.rds / .csv
 source("R/04_plots.R")           # writes figs/*.png
 ```
 
-The run is parallelised over conditions (`future.apply`, one L'Ecuyer RNG
-stream per condition — reproducible regardless of worker count) and
-resumable: existing `cond_*.rds` files are skipped. Progress:
-`length(list.files("results/conditions"))` out of 1024. `sessionInfo()` is
-saved alongside the results.
+`runSimulation()` handles parallelisation (`parallel = TRUE`), per-condition
+seeds (`seed = 20260716 + 1:1024`, so the run is fully reproducible), and
+progress/ETA reporting. If the run is interrupted, re-sourcing the script
+resumes automatically from SimDesign's tempfile. Replication-level raw
+results are stored in `results/raw-results/` (`save_results = TRUE`), the
+condition-level summary in `results/irr_simdesign.rds`, and error/warning
+bookkeeping is available via `SimExtract(res, "errors")`. `sessionInfo()`
+is saved alongside the results, per the Siepe et al. checklist.
 
 ## References
 
 - Bryer, J. *IRRsim: Simulating Inter-Rater Reliability*. https://irrsim.bryer.org
+- Chalmers, R. P., & Adkins, M. C. (2020). Writing effective and reliable
+  Monte Carlo simulations with the SimDesign package. *The Quantitative
+  Methods for Psychology, 16*(4), 248–280.
 - Gwet, K. L. (2014). *Handbook of Inter-Rater Reliability* (4th ed.).
 - Morris, T. P., White, I. R., & Crowther, M. J. (2019). Using simulation
   studies to evaluate statistical methods. *Statistics in Medicine, 38*(11),

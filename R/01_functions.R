@@ -1,12 +1,14 @@
 # =====================================================================
 # 01_functions.R
-# Data-generating process, true (population) values, and estimators
-# for the inter-rater agreement coefficient simulation.
+# Helpers for the SimDesign simulation: response distributions,
+# analytic true (population) values, and coefficient estimators.
+# All estimator calls use :: so that SimDesign's `packages` argument
+# can load dependencies on parallel workers.
 # =====================================================================
 
-library(IRRsim)
-library(irr)
-library(irrCAC)
+# Coefficient labels used throughout Analyse/Summarise/post-processing
+COEF_LABELS <- c("PA", "Kappa", "Kappa_quad", "Fleiss",
+                 "AC1", "AC2_quad", "Alpha_ord", "BP", "ICC21")
 
 # ---------------------------------------------------------------------
 # Response probability distributions
@@ -79,8 +81,8 @@ true_bp <- function(agree, p, weights = "unweighted") {
   (pa - pe) / (1 - pe)
 }
 
-# True value dispatcher, keyed by the coefficient labels used in
-# run_one_rep(). Kappa family, alpha, and ICC all equal `agree`.
+# True value dispatcher, keyed by COEF_LABELS. Kappa family, alpha,
+# and ICC all equal `agree`.
 true_value <- function(coefficient, agree, nLevels, prob_type) {
   p <- get_probs(prob_type, nLevels)
   switch(coefficient,
@@ -110,27 +112,20 @@ cac_est <- function(fit) {
 }
 
 # ---------------------------------------------------------------------
-# One simulation replication
+# Fit all coefficients on one rating matrix
 #
-# Returns a long data.frame: one row per coefficient with the point
-# estimate and the p-value of H0: coefficient = 0 (NA where no test
-# exists). categ.labels = 1:nLevels is passed to all irrCAC estimators
-# so that unobserved categories in small samples do not silently shrink
-# the category space (this matters for the weighted coefficients).
+# Returns a named numeric vector est.<coef> / p.<coef> (p = p-value of
+# H0: coefficient = 0; NA where no test exists). Failed fits yield NA
+# rather than throwing, so SimDesign does NOT redraw the data on
+# estimation failure — redraws would condition results on estimability
+# and bias the small-sample conditions. The NA rate is reported as the
+# convergence rate in Summarise(). categ.labels = 1:nLevels keeps
+# unobserved categories from shrinking the category space (this matters
+# for the weighted coefficients).
 # ---------------------------------------------------------------------
 
-run_one_rep <- function(nLevels, k, agree, nEvents, prob_type) {
+fit_all_coefficients <- function(x, nLevels) {
 
-  p <- get_probs(prob_type, nLevels)
-
-  x <- IRRsim::simulateRatingMatrix(
-    nLevels        = nLevels,
-    k              = k,
-    k_per_event    = k,
-    agree          = agree,
-    nEvents        = nEvents,
-    response.probs = p
-  )
   xdf  <- as.data.frame(x)
   labs <- seq_len(nLevels)
 
@@ -158,13 +153,13 @@ run_one_rep <- function(nLevels, k, agree, nEvents, prob_type) {
   pvals["PA"] <- NA_real_  # H0: PA = 0 is not a meaningful test
 
   # ICC(2,1): two-way random effects, absolute agreement, single rater
-  icc_fit <- safe_fit(irr::icc(x, model = "twoway", type = "agreement",
-                               unit = "single"))
+  icc_fit <- safe_fit(irr::icc(as.matrix(x), model = "twoway",
+                               type = "agreement", unit = "single"))
   ests  <- c(ests,  ICC21 = if (is.null(icc_fit)) NA_real_ else num1(icc_fit$value))
   pvals <- c(pvals, ICC21 = if (is.null(icc_fit)) NA_real_ else num1(icc_fit$p.value))
 
-  data.frame(coefficient = names(ests),
-             estimate    = unname(ests),
-             p_value     = unname(pvals),
-             row.names   = NULL)
+  stopifnot(identical(names(ests), COEF_LABELS))
+
+  c(stats::setNames(ests,  paste0("est.", names(ests))),
+    stats::setNames(pvals, paste0("p.",  names(pvals))))
 }
