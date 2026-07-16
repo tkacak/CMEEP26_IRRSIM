@@ -31,7 +31,12 @@ perf <- res %>%
       is.na(Rejection)                      ~ NA_character_,
       abs(truth) < .Machine$double.eps^0.5  ~ "TypeI",
       TRUE                                  ~ "Power"
-    )
+    ),
+    # Weighted variants duplicate their unweighted counterparts when
+    # nLevels == 2 (see coef_applicable in 01_functions.R); figures and
+    # reports keep applicable == TRUE rows only
+    applicable = coef_applicable(coefficient, nLevels),
+    coef_name  = coef_display(coefficient)
   )
 
 saveRDS(perf, file.path(out_dir, "performance.rds"))
@@ -49,7 +54,7 @@ perf %>%
 
 # Worst relative bias per coefficient (flags small-n problems)
 perf %>%
-  filter(agree > 0) %>%
+  filter(agree > 0, applicable) %>%
   group_by(coefficient) %>%
   slice_max(abs(RelBias), n = 1) %>%
   select(coefficient, nLevels, k, agree, nEvents, prob_type,

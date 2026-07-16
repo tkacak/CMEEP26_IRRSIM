@@ -76,6 +76,20 @@ rather than thrown, so SimDesign does **not** redraw the data on failure —
 redraws would condition results on estimability and bias the small-sample
 conditions. The NA rate is reported as the convergence rate.
 
+**Condition-dependent coefficient set.** `Analyse()` computes the full set
+in every condition (SimDesign needs consistent result names), but
+post-processing flags applicability (`coef_applicable()`), and figures keep
+only applicable rows:
+
+- `k = 2`: Conger's kappa reduces exactly to **Cohen's kappa**; for `k > 2`
+  it is the multi-rater generalisation (reported alongside Fleiss' kappa).
+- `nLevels = 2`: the weighted variants (`Kappa_quad`, `AC2_quad`) are
+  mathematically identical to their unweighted counterparts, so they are
+  flagged non-applicable to avoid double-plotting the same estimator.
+  Krippendorff's ordinal alpha likewise reduces to nominal alpha at
+  `nLevels = 2` but stays applicable since no separate nominal alpha is
+  reported.
+
 **Performance measures** (per condition × coefficient, with MCSE; S =
 converged replications):
 

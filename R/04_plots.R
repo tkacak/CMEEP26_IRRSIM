@@ -11,7 +11,11 @@ out_dir <- "results"
 fig_dir <- "figs"
 dir.create(fig_dir, showWarnings = FALSE)
 
-perf <- readRDS(file.path(out_dir, "performance.rds"))
+# applicable == FALSE rows are weighted variants at nLevels == 2, where
+# they are mathematically identical to their unweighted counterparts
+perf <- readRDS(file.path(out_dir, "performance.rds")) %>%
+  filter(applicable) %>%
+  mutate(coefficient = coef_name)
 
 plot_measure <- function(data, y, y_mcse, ylab, ref = 0,
                          band = c(-0.05, 0.05)) {

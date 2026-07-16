@@ -123,7 +123,7 @@ res <- runSimulation(
   generate      = Generate,
   analyse       = Analyse,
   summarise     = Summarise,
-  fixed_objects = list(coefs = COEF_LABELS, alpha = alpha_level),
+  fixed_objects = list(coefs = coef_labels(), alpha = alpha_level),
   packages      = c("IRRsim", "irr", "irrCAC"),
   seed          = 20260716 + seq_len(nrow(Design)),  # one seed per condition
   parallel      = TRUE,

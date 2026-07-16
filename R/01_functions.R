@@ -6,9 +6,39 @@
 # can load dependencies on parallel workers.
 # =====================================================================
 
-# Coefficient labels used throughout Analyse/Summarise/post-processing
-COEF_LABELS <- c("PA", "Kappa", "Kappa_quad", "Fleiss",
-                 "AC1", "AC2_quad", "Alpha_ord", "BP", "ICC21")
+# Coefficient labels used throughout Analyse/Summarise/post-processing.
+# Defined as a function (not a global constant) because SimDesign exports
+# workspace *functions* to parallel workers but not plain data objects —
+# a global vector here raises "object not found" on the workers.
+coef_labels <- function() {
+  c("PA", "Kappa", "Kappa_quad", "Fleiss",
+    "AC1", "AC2_quad", "Alpha_ord", "BP", "ICC21")
+}
+
+# Display names for tables/figures
+coef_display <- function(coefficient) {
+  c(PA         = "Percent agreement",
+    Kappa      = "Cohen/Conger kappa",
+    Kappa_quad = "Quadratic-weighted kappa (QWK)",
+    Fleiss     = "Fleiss kappa",
+    AC1        = "Gwet AC1",
+    AC2_quad   = "Gwet AC2 (quadratic)",
+    Alpha_ord  = "Krippendorff alpha (ordinal)",
+    BP         = "Brennan-Prediger",
+    ICC21      = "ICC(2,1)")[coefficient]
+}
+
+# Condition-dependent applicability of the coefficient set:
+# with nLevels == 2 the weighted variants are mathematically identical to
+# their unweighted counterparts (quadratic-weighted kappa == kappa,
+# AC2 == AC1), so reporting them would duplicate the same estimator.
+# Post-processing and figures keep only applicable == TRUE rows.
+# (Conger's kappa reduces exactly to Cohen's kappa at k == 2, and
+# Krippendorff's ordinal alpha reduces to nominal alpha at nLevels == 2,
+# so those stay applicable everywhere.)
+coef_applicable <- function(coefficient, nLevels) {
+  ifelse(coefficient %in% c("Kappa_quad", "AC2_quad"), nLevels > 2, TRUE)
+}
 
 # ---------------------------------------------------------------------
 # Response probability distributions
@@ -158,7 +188,7 @@ fit_all_coefficients <- function(x, nLevels) {
   ests  <- c(ests,  ICC21 = if (is.null(icc_fit)) NA_real_ else num1(icc_fit$value))
   pvals <- c(pvals, ICC21 = if (is.null(icc_fit)) NA_real_ else num1(icc_fit$p.value))
 
-  stopifnot(identical(names(ests), COEF_LABELS))
+  stopifnot(identical(names(ests), coef_labels()))
 
   c(stats::setNames(ests,  paste0("est.", names(ests))),
     stats::setNames(pvals, paste0("p.",  names(pvals))))
