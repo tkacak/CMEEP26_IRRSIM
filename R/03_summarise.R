@@ -19,7 +19,7 @@ res <- readRDS(file.path(out_dir, "irr_simdesign.rds"))
 
 perf <- res %>%
   as.data.frame() %>%
-  select(nLevels, k, agree, nEvents, prob_type, contains(".")) %>%
+  select(nLevels, k, rho, nEvents, prob_type, contains(".")) %>%
   pivot_longer(cols = contains("."),
                names_to = c("measure", "coefficient"),
                names_sep = "\\.") %>%
@@ -27,7 +27,7 @@ perf <- res %>%
   mutate(
     # Rejection of H0: coeff = 0 is Power where the population value is
     # non-zero and Type I error where it is exactly zero. Note that at
-    # agree = 0 with skewed margins, AC1/AC2 have truth != 0, so their
+    # rho = 0 with skewed margins, AC1/AC2 have truth != 0, so their
     # rejection rate there is still power, not size.
     rejection_type = case_when(
       is.na(Rejection)                      ~ NA_character_,
@@ -60,17 +60,17 @@ perf %>%
 
 # Worst relative bias per coefficient (flags small-n problems)
 perf %>%
-  filter(agree > 0, applicable) %>%
+  filter(rho > 0, applicable) %>%
   group_by(coefficient) %>%
   slice_max(abs(RelBias), n = 1) %>%
-  select(coefficient, nLevels, k, agree, nEvents, prob_type,
+  select(coefficient, nLevels, k, rho, nEvents, prob_type,
          RelBias, RelBias_MCSE) %>%
   print(n = Inf)
 
 # Weighted vs unweighted at a glance: mean |RelBias| and mean power by
-# family x weighting (collapsed over conditions with agree > 0)
+# family x weighting (collapsed over conditions with rho > 0)
 perf %>%
-  filter(agree > 0, applicable) %>%
+  filter(rho > 0, applicable) %>%
   group_by(family, weighting) %>%
   summarise(mean_abs_RelBias = mean(abs(RelBias), na.rm = TRUE),
             mean_EmpSE       = mean(EmpSE, na.rm = TRUE),

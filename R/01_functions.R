@@ -1,13 +1,22 @@
 # =====================================================================
 # 01_functions.R
-# Helpers for the SimDesign simulation: response distributions,
-# analytic true (population) values, and coefficient estimators.
+# Helpers for the SimDesign simulation: UVA data generation, numeric
+# true (population) values, and coefficient estimators.
 #
 # Research question: do weighted agreement coefficients outperform
 # their unweighted ("default") counterparts on ordinal scales?
 # Two coefficient families x weighting schemes:
 #   Kappa family : Cohen's kappa (unweighted) | quadratic (QWK)
 #   Gwet family  : AC1 (unweighted) | AC2-linear | AC2-quadratic
+#
+# Data-generating mechanism: Underlying Variable Approach (UVA;
+# Muthen, 1984, as used by Almehrizi, 2025). Two standard-normal latent
+# variables with correlation rho are discretised into L ordinal
+# categories with a common set of thresholds. Unlike Almehrizi's flow,
+# thresholds are FIXED design factors (balanced vs skewed prevalence)
+# rather than randomly drawn per data set: random thresholds would make
+# every replication estimate a different population value, which is
+# incompatible with bias/power evaluation against known truths.
 #
 # All estimator calls use :: so that SimDesign's `packages` argument
 # can load dependencies on parallel workers. All shared constants are
@@ -53,7 +62,15 @@ coef_applicable <- function(coefficient, nLevels) {
 }
 
 # ---------------------------------------------------------------------
-# Response probability distributions
+# Category prevalence targets and UVA thresholds
+#
+# prob_type controls the population category prevalences via the
+# discretisation thresholds (identical for both raters, so marginal
+# distributions are symmetric):
+#   uniform : all categories equally prevalent, p_i = 1/L
+#   skew    : p_i proportional to i (upper categories more prevalent)
+# Thresholds are the standard-normal quantiles of the cumulative
+# prevalences, so the realised margins match get_probs() exactly.
 # ---------------------------------------------------------------------
 
 skew_probs <- function(nLevels) {
@@ -68,21 +85,42 @@ get_probs <- function(prob_type, nLevels) {
          stop("Unknown prob_type: ", prob_type))
 }
 
+uva_thresholds <- function(prob_type, nLevels) {
+  p <- get_probs(prob_type, nLevels)
+  stats::qnorm(cumsum(p[-nLevels]))
+}
+
 # ---------------------------------------------------------------------
-# True (population) values under the IRRsim data-generating process
+# UVA data generation for one condition (k = 2 raters)
 #
-# simulateRatingMatrix() works per event as: draw a seed score X ~ p;
-# with probability `agree` ALL raters score X, otherwise every rater
-# scores independently from p. Hence for any pair of raters the joint
-# distribution of scores is
-#     P(i, j) = agree * p_i * 1{i == j} + (1 - agree) * p_i * p_j
-# From this all population coefficient values follow analytically
-# (derivations in README.md):
-#   * Cohen's kappa with ANY weights equals `agree` (every disagreement
-#     comes from the independence component, so weighted observed
-#     disagreement = (1 - agree) x weighted chance disagreement).
-#   * Gwet's AC1/AC2 use a different chance correction; their true
-#     values are computed below and differ from `agree` under skew.
+# (Z1, Z2) ~ standard bivariate normal with correlation rho; both are
+# discretised with the same thresholds. rho is the latent ("true")
+# agreement parameter of the design.
+# ---------------------------------------------------------------------
+
+uva_generate <- function(nEvents, rho, nLevels, prob_type) {
+  th <- uva_thresholds(prob_type, nLevels)
+  z1 <- stats::rnorm(nEvents)
+  z2 <- rho * z1 + sqrt(1 - rho^2) * stats::rnorm(nEvents)
+  cbind(R1 = findInterval(z1, th) + 1L,
+        R2 = findInterval(z2, th) + 1L)
+}
+
+# ---------------------------------------------------------------------
+# True (population) values under the UVA data-generating process
+#
+# With rho and the thresholds fixed, the population L x L joint table
+# of the two raters' categories is
+#   P(i, j) = P(t_{i-1} < Z1 <= t_i, t_{j-1} < Z2 <= t_j)
+# computed here by 1-D Gaussian quadrature (base R integrate(); no
+# extra package needed):
+#   P(i, j) = int_{t_{i-1}}^{t_i} phi(z) *
+#             [Phi((t_j - rho z)/s) - Phi((t_{j-1} - rho z)/s)] dz,
+#   s = sqrt(1 - rho^2).
+# Every coefficient's population value follows by plugging P and the
+# margins p into its defining formula. Note that under UVA the weighted
+# and unweighted coefficients have genuinely different estimands, so
+# each is evaluated against its own true value.
 # ---------------------------------------------------------------------
 
 agreement_weights <- function(L, weights = c("unweighted", "linear", "quadratic")) {
@@ -95,36 +133,55 @@ agreement_weights <- function(L, weights = c("unweighted", "linear", "quadratic"
          quadratic  = 1 - (i - j)^2 / (L - 1)^2)
 }
 
-# Population pairwise joint distribution of two raters' scores
-pair_joint <- function(agree, p) {
-  P <- (1 - agree) * outer(p, p)
-  diag(P) <- diag(P) + agree * p
-  P
+uva_joint <- function(rho, thresholds) {
+  L <- length(thresholds) + 1
+  b <- c(-Inf, thresholds, Inf)
+  p <- diff(stats::pnorm(b))
+  if (abs(rho) < 1e-12) return(outer(p, p))
+  s <- sqrt(1 - rho^2)
+  P <- matrix(0, L, L)
+  for (i in seq_len(L)) {
+    for (j in seq_len(L)) {
+      P[i, j] <- stats::integrate(
+        function(z) stats::dnorm(z) *
+          (stats::pnorm((b[j + 1] - rho * z) / s) -
+           stats::pnorm((b[j]     - rho * z) / s)),
+        lower = b[i], upper = b[i + 1],
+        rel.tol = 1e-10, abs.tol = 1e-12
+      )$value
+    }
+  }
+  P / sum(P)  # remove tiny numerical drift
 }
 
-# Expected raw percent agreement (reference only; not an estimand here)
-true_pa <- function(agree, p) {
-  agree + (1 - agree) * sum(p^2)
+# Population Cohen's (weighted) kappa: chance = product of the margins
+true_kappa_w <- function(P, p, W) {
+  pa <- sum(W * P)
+  pe <- sum(W * outer(p, p))
+  (pa - pe) / (1 - pe)
 }
 
-# Gwet's AC1 (unweighted) / AC2 (weighted); Gwet (2014) chance agreement
-true_gwet <- function(agree, p, weights = "unweighted") {
-  L <- length(p)
-  W <- agreement_weights(L, weights)
-  pa <- sum(W * pair_joint(agree, p))
+# Population Gwet AC1/AC2: Gwet (2014) chance agreement
+true_gwet_w <- function(P, p, W) {
+  L  <- length(p)
+  pa <- sum(W * P)
   pe <- sum(W) * sum(p * (1 - p)) / (L * (L - 1))
   (pa - pe) / (1 - pe)
 }
 
-# True value dispatcher, keyed by coef_labels(). The kappa family
-# equals `agree` for every weighting scheme.
-true_value <- function(coefficient, agree, nLevels, prob_type) {
-  p <- get_probs(prob_type, nLevels)
-  switch(coefficient,
-         AC1        = true_gwet(agree, p, "unweighted"),
-         AC2_linear = true_gwet(agree, p, "linear"),
-         AC2_quad   = true_gwet(agree, p, "quadratic"),
-         agree)
+# True value dispatcher, keyed by coef_labels()
+true_value <- function(coefficient, rho, nLevels, prob_type) {
+  p  <- get_probs(prob_type, nLevels)
+  th <- uva_thresholds(prob_type, nLevels)
+  P  <- uva_joint(rho, th)
+  W  <- switch(coefficient,
+               Kappa      = agreement_weights(nLevels, "unweighted"),
+               Kappa_quad = agreement_weights(nLevels, "quadratic"),
+               AC1        = agreement_weights(nLevels, "unweighted"),
+               AC2_linear = agreement_weights(nLevels, "linear"),
+               AC2_quad   = agreement_weights(nLevels, "quadratic"))
+  if (startsWith(coefficient, "Kappa")) true_kappa_w(P, p, W)
+  else true_gwet_w(P, p, W)
 }
 
 # ---------------------------------------------------------------------

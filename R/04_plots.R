@@ -23,7 +23,7 @@ perf <- readRDS(file.path(out_dir, "performance.rds")) %>%
 plot_measure <- function(data, y, ylab, ref = 0,
                          band = c(-0.05, 0.05)) {
   ggplot(data,
-         aes(x = agree, y = .data[[y]],
+         aes(x = rho, y = .data[[y]],
              colour = weighting, shape = weighting,
              group = weighting)) +
     { if (!is.null(band)) geom_hline(yintercept = band, linetype = "dotted") } +
@@ -33,7 +33,7 @@ plot_measure <- function(data, y, ylab, ref = 0,
     facet_grid(nLevels ~ family,
                labeller = labeller(nLevels = function(x) paste0("L = ", x))) +
     scale_x_continuous(breaks = seq(0.3, 0.9, 0.2)) +
-    labs(x = "True agreement (agree)", y = ylab,
+    labs(x = "Latent true agreement (rho)", y = ylab,
          colour = "Weighting", shape = "Weighting") +
     theme_bw() +
     theme(legend.position = "bottom")
@@ -42,7 +42,7 @@ plot_measure <- function(data, y, ylab, ref = 0,
 for (pt in unique(perf$prob_type)) {
   for (ne in unique(perf$nEvents)) {
 
-    d <- perf %>% filter(prob_type == pt, nEvents == ne, agree > 0)
+    d <- perf %>% filter(prob_type == pt, nEvents == ne, rho > 0)
     tag <- sprintf("%s_n%02d", pt, ne)
 
     ggsave(file.path(fig_dir, paste0("relbias_", tag, ".png")),
@@ -67,8 +67,8 @@ for (pt in unique(perf$prob_type)) {
   }
 }
 
-# Type I error figure (agree = 0 conditions, where truth == 0).
-# Under skewed margins the AC family has truth != 0 at agree = 0, so
+# Type I error figure (rho = 0 conditions, where truth == 0).
+# Under skewed margins the AC family has truth != 0 at rho = 0, so
 # those cells appear only in the uniform columns.
 d0 <- perf %>% filter(rejection_type == "TypeI")
 if (nrow(d0) > 0) {

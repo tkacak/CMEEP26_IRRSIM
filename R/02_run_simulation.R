@@ -2,22 +2,25 @@
 # 02_run_simulation.R
 # SimDesign (Chalmers & Adkins, 2020) implementation of the full
 # factorial Monte Carlo simulation comparing weighted vs unweighted
-# agreement coefficients (kappa family and Gwet AC family).
+# agreement coefficients (kappa family and Gwet AC family) under the
+# Underlying Variable Approach (Muthen, 1984).
 #
 # Design (ADEMP; see README.md):
-#   nLevels   : 3, 4, 5
-#   k         : 2 raters (both raters rate all events)
-#   agree     : 0.30 ... 0.90 by 0.10 (+ 0.00 null condition for Type I)
+#   nLevels   : 3, 4, 5 ordinal categories
+#   k         : 2 raters (both rate all events)
+#   rho       : 0.30 ... 0.90 by 0.10 latent correlation
+#               (+ 0.00 null condition for Type I error)
 #   nEvents   : 20, 30, 40, 50
-#   prob_type : uniform, skew
+#   prob_type : uniform, skew (category prevalence via fixed thresholds)
 #   -> 192 conditions
 #
 # Run this script with the R/ folder as the working directory.
 # Performance measures with analytic Monte Carlo standard errors
 # (Siepe et al., 2024; Morris, White & Crowther, 2019) are computed in
-# Summarise(). Raw replication-level results are stored per condition
-# via save_results = TRUE; an interrupted run resumes automatically
-# from SimDesign's tempfile when this script is re-run.
+# Summarise() against numerically computed population values. Raw
+# replication-level results are stored per condition via
+# save_results = TRUE; an interrupted run resumes automatically from
+# SimDesign's tempfile when this script is re-run.
 # =====================================================================
 
 library(SimDesign)
@@ -35,7 +38,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 Design <- createDesign(
   nLevels   = 3:5,
   k         = 2,
-  agree     = c(0, seq(0.30, 0.90, by = 0.10)),  # 0 = null (Type I error)
+  rho       = c(0, seq(0.30, 0.90, by = 0.10)),  # 0 = null (Type I error)
   nEvents   = c(20, 30, 40, 50),
   prob_type = c("uniform", "skew")
 )
@@ -43,15 +46,10 @@ Design <- createDesign(
 # ----------------------- generate / analyse ---------------------------
 
 Generate <- function(condition, fixed_objects) {
-  p <- get_probs(condition$prob_type, condition$nLevels)
-  IRRsim::simulateRatingMatrix(
-    nLevels        = condition$nLevels,
-    k              = condition$k,
-    k_per_event    = condition$k,
-    agree          = condition$agree,
-    nEvents        = condition$nEvents,
-    response.probs = p
-  )
+  uva_generate(nEvents   = condition$nEvents,
+               rho       = condition$rho,
+               nLevels   = condition$nLevels,
+               prob_type = condition$prob_type)
 }
 
 Analyse <- function(condition, dat, fixed_objects) {
@@ -68,7 +66,8 @@ Analyse <- function(condition, dat, fixed_objects) {
 #   EmpSE     MCSE = EmpSE/sqrt(2(S-1))
 #   RMSE      MCSE = sqrt(var((est-truth)^2)/S) / (2*RMSE)  [delta method]
 #   Rejection MCSE = sqrt(R(1-R)/S)
-# S = converged (non-missing) replications.
+# S = converged (non-missing) replications. truth = the coefficient's
+# own population value under the UVA process (see 01_functions.R).
 
 Summarise <- function(condition, results, fixed_objects) {
 
@@ -83,7 +82,7 @@ Summarise <- function(condition, results, fixed_objects) {
     R <- length(est)
     S <- sum(!is.na(est))
 
-    truth <- true_value(cf, condition$agree,
+    truth <- true_value(cf, condition$rho,
                         condition$nLevels, condition$prob_type)
 
     mean_est  <- mean(est, na.rm = TRUE)
@@ -126,7 +125,7 @@ res <- runSimulation(
   analyse       = Analyse,
   summarise     = Summarise,
   fixed_objects = list(coefs = coef_labels(), alpha = alpha_level),
-  packages      = c("IRRsim", "irr", "irrCAC"),
+  packages      = c("irrCAC"),
   seed          = genSeeds(design = Design, iseed = 22),
   parallel      = TRUE,
   filename      = file.path(out_dir, "irr_simdesign"),
