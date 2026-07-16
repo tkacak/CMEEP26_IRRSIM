@@ -1,7 +1,11 @@
 # =====================================================================
 # 04_plots.R
-# Figures: relative bias, bias (with MCSE bands), and power curves.
-# One PNG per (nEvents x prob_type) cell; panels are nLevels x k.
+# Figures for the weighted-vs-unweighted comparison: relative bias,
+# bias, empirical SE, and power curves. Panels are nLevels x coefficient
+# family; colour/shape encode the weighting scheme, so each panel
+# directly contrasts unweighted vs linear vs quadratic within a family.
+# One PNG per (nEvents x prob_type) cell.
+# Run with the R/ folder as the working directory.
 # =====================================================================
 
 library(dplyr)
@@ -14,25 +18,23 @@ dir.create(fig_dir, showWarnings = FALSE)
 # applicable == FALSE rows are weighted variants at nLevels == 2, where
 # they are mathematically identical to their unweighted counterparts
 perf <- readRDS(file.path(out_dir, "performance.rds")) %>%
-  filter(applicable) %>%
-  mutate(coefficient = coef_name)
+  filter(applicable)
 
 plot_measure <- function(data, y, ylab, ref = 0,
                          band = c(-0.05, 0.05)) {
   ggplot(data,
          aes(x = agree, y = .data[[y]],
-             colour = coefficient, shape = coefficient,
-             group = coefficient)) +
+             colour = weighting, shape = weighting,
+             group = weighting)) +
     { if (!is.null(band)) geom_hline(yintercept = band, linetype = "dotted") } +
     geom_hline(yintercept = ref, linetype = "dashed") +
     geom_line(linewidth = 0.6) +
     geom_point(size = 1.8) +
-    facet_grid(nLevels ~ k,
-               labeller = labeller(nLevels = function(x) paste0("L = ", x),
-                                   k = function(x) paste0("k = ", x))) +
+    facet_grid(nLevels ~ family,
+               labeller = labeller(nLevels = function(x) paste0("L = ", x))) +
     scale_x_continuous(breaks = seq(0.3, 0.9, 0.2)) +
     labs(x = "True agreement (agree)", y = ylab,
-         colour = NULL, shape = NULL) +
+         colour = "Weighting", shape = "Weighting") +
     theme_bw() +
     theme(legend.position = "bottom")
 }
@@ -46,33 +48,40 @@ for (pt in unique(perf$prob_type)) {
     ggsave(file.path(fig_dir, paste0("relbias_", tag, ".png")),
            plot_measure(d, "RelBias",
                         "Relative bias", band = c(-0.05, 0.05)),
-           width = 10, height = 8, dpi = 300)
+           width = 8, height = 8, dpi = 300)
 
     ggsave(file.path(fig_dir, paste0("bias_", tag, ".png")),
            plot_measure(d, "Bias", "Bias", band = NULL),
-           width = 10, height = 8, dpi = 300)
+           width = 8, height = 8, dpi = 300)
+
+    ggsave(file.path(fig_dir, paste0("empse_", tag, ".png")),
+           plot_measure(d, "EmpSE", "Empirical SE", band = NULL),
+           width = 8, height = 8, dpi = 300)
 
     ggsave(file.path(fig_dir, paste0("power_", tag, ".png")),
            plot_measure(d %>% filter(rejection_type == "Power"),
                         "Rejection",
                         "Power (H0: coefficient = 0)",
                         ref = 0.80, band = NULL),
-           width = 10, height = 8, dpi = 300)
+           width = 8, height = 8, dpi = 300)
   }
 }
 
-# Type I error figure (agree = 0 conditions, where truth == 0)
+# Type I error figure (agree = 0 conditions, where truth == 0).
+# Under skewed margins the AC family has truth != 0 at agree = 0, so
+# those cells appear only in the uniform columns.
 d0 <- perf %>% filter(rejection_type == "TypeI")
 if (nrow(d0) > 0) {
   p0 <- ggplot(d0, aes(x = factor(nEvents), y = Rejection,
-                       colour = coefficient, shape = coefficient,
-                       group = coefficient)) +
+                       colour = weighting, shape = weighting,
+                       group = weighting)) +
     geom_hline(yintercept = 0.05, linetype = "dashed") +
     geom_line(linewidth = 0.6) +
     geom_point(size = 1.8) +
-    facet_grid(nLevels ~ k + prob_type) +
+    facet_grid(nLevels ~ family + prob_type,
+               labeller = labeller(nLevels = function(x) paste0("L = ", x))) +
     labs(x = "nEvents", y = "Type I error (nominal .05)",
-         colour = NULL, shape = NULL) +
+         colour = "Weighting", shape = "Weighting") +
     theme_bw() +
     theme(legend.position = "bottom")
   ggsave(file.path(fig_dir, "type1_error.png"), p0,

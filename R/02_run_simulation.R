@@ -1,7 +1,8 @@
 # =====================================================================
 # 02_run_simulation.R
 # SimDesign (Chalmers & Adkins, 2020) implementation of the full
-# factorial Monte Carlo simulation.
+# factorial Monte Carlo simulation comparing weighted vs unweighted
+# agreement coefficients (kappa family and Gwet AC family).
 #
 # Design (ADEMP; see README.md):
 #   nLevels   : 3, 4, 5
@@ -9,8 +10,9 @@
 #   agree     : 0.30 ... 0.90 by 0.10 (+ 0.00 null condition for Type I)
 #   nEvents   : 20, 30, 40, 50
 #   prob_type : uniform, skew
-#   -> 192 conditions x 1000 replications
+#   -> 192 conditions
 #
+# Run this script with the R/ folder as the working directory.
 # Performance measures with analytic Monte Carlo standard errors
 # (Siepe et al., 2024; Morris, White & Crowther, 2019) are computed in
 # Summarise(). Raw replication-level results are stored per condition
@@ -19,11 +21,11 @@
 # =====================================================================
 
 library(SimDesign)
-source("R/01_functions.R")
+source("01_functions.R")
 
 # ------------------------- configuration -----------------------------
 
-n_reps      <- 1000
+n_reps      <- 100   # test runs; set to 1000 for the final run (MCSE targets)
 alpha_level <- 0.05
 out_dir     <- "results"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -60,7 +62,7 @@ Analyse <- function(condition, dat, fixed_objects) {
 
 # ----------------------------- summarise -------------------------------
 # Per coefficient: Bias, RelBias, EmpSE, RMSE, rejection rate of
-# H0: coeff = 0, and convergence rate — each with its MCSE:
+# H0: coeff = 0, and convergence rate - each with its MCSE:
 #   Bias      MCSE = sqrt(var(est)/S)
 #   RelBias   MCSE = MCSE(Bias)/|truth|
 #   EmpSE     MCSE = EmpSE/sqrt(2(S-1))
@@ -125,12 +127,13 @@ res <- runSimulation(
   summarise     = Summarise,
   fixed_objects = list(coefs = coef_labels(), alpha = alpha_level),
   packages      = c("IRRsim", "irr", "irrCAC"),
-  seed          = 20260716 + seq_len(nrow(Design)),  # one seed per condition
+  seed          = genSeeds(design = Design, iseed = 22),
   parallel      = TRUE,
   filename      = file.path(out_dir, "irr_simdesign"),
   save_results  = TRUE,
   save_details  = list(save_results_dirname = file.path(out_dir, "raw-results")),
-  progress      = TRUE
+  progress      = TRUE,
+  control       = list(allow_na = TRUE, allow_nan = TRUE)
 )
 
 # ------------------- reproducibility bookkeeping ----------------------

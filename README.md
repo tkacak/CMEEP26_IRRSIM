@@ -12,9 +12,11 @@ Monte Carlo standard errors (MCSE) from Morris, White & Crowther (2019).
 
 ## Design (ADEMP)
 
-**Aims.** Compare bias, relative bias, and power (plus Type I error) of
-commonly used agreement coefficients for ordinal rating scales across small
-rating designs.
+**Aims.** Test whether *weighted* agreement coefficients outperform their
+unweighted ("default") counterparts on ordinal rating scales: Cohen's kappa
+vs quadratic-weighted kappa (QWK), and Gwet's AC1 vs AC2 with linear and
+quadratic weights — compared on bias, relative bias, empirical SE, and
+power (plus Type I error) across small rating designs.
 
 **Data-generating mechanism.** `IRRsim::simulateRatingMatrix()`. For each
 event a seed score is drawn from the response distribution *p*; with
@@ -40,30 +42,25 @@ Because every disagreement arises only from the independence component, for
 `(1 − agree)` times the expected chance disagreement computed from the
 (identical) marginals. Hence the population values are:
 
-| Coefficient                                   | True value |
-|-----------------------------------------------|------------|
-| Cohen/Conger kappa, Fleiss kappa (any weights)| `agree`    |
-| Krippendorff's alpha (any metric)             | `agree` (asymptotically) |
-| ICC(2,1) agreement                            | `agree` (pairwise product-moment correlation = `agree`) |
-| Percent agreement                             | `agree + (1 − agree) Σp²` |
-| Gwet AC1 / AC2, Brennan–Prediger              | closed form; = `agree` under uniform *p*, ≠ `agree` under skew (see `true_value()` in `R/01_functions.R`) |
+| Coefficient                       | True value |
+|-----------------------------------|------------|
+| Cohen's kappa (any weights)       | `agree` — every disagreement comes from the independence component, so weighted observed disagreement = (1 − `agree`) × weighted chance disagreement for *any* weight matrix |
+| Gwet AC1 / AC2 (any weights)      | closed form; = `agree` under uniform *p*, ≠ `agree` under skew (see `true_value()` in `R/01_functions.R`) |
+| Percent agreement (reference)     | `agree + (1 − agree) Σp²` |
 
 This is why performance must be evaluated against **each coefficient's own
 estimand**, not against `agree` for all of them.
 
-**Methods (coefficients compared).**
+**Methods (coefficients compared).** Two families × weighting schemes,
+crossed so the weighted-vs-unweighted contrast is made *within* family:
 
-| Label        | Coefficient                              | Implementation |
-|--------------|-------------------------------------------|----------------|
-| `PA`         | Percent agreement (descriptive baseline) | `irrCAC::pa.coeff.raw` |
-| `Kappa`      | Conger's kappa (= Cohen's kappa at k = 2)| `irrCAC::conger.kappa.raw` |
-| `Kappa_quad` | Quadratic-weighted kappa (= QWK)         | `irrCAC::conger.kappa.raw(weights = "quadratic")` |
-| `Fleiss`     | Fleiss' kappa                            | `irrCAC::fleiss.kappa.raw` |
-| `AC1`        | Gwet's AC1                               | `irrCAC::gwet.ac1.raw` |
-| `AC2_quad`   | Gwet's AC2, quadratic weights            | `irrCAC::gwet.ac1.raw(weights = "quadratic")` |
-| `Alpha_ord`  | Krippendorff's alpha, ordinal weights    | `irrCAC::krippen.alpha.raw(weights = "ordinal")` |
-| `BP`         | Brennan–Prediger                         | `irrCAC::bp.coeff.raw` |
-| `ICC21`      | ICC(2,1), two-way random, agreement      | `irr::icc` |
+| Label        | Family | Weighting  | Implementation |
+|--------------|--------|------------|----------------|
+| `Kappa`      | Kappa  | unweighted | `irrCAC::conger.kappa.raw` (= Cohen's kappa at k = 2) |
+| `Kappa_quad` | Kappa  | quadratic  | `irrCAC::conger.kappa.raw(weights = "quadratic")` (= QWK) |
+| `AC1`        | Gwet   | unweighted | `irrCAC::gwet.ac1.raw` |
+| `AC2_linear` | Gwet   | linear     | `irrCAC::gwet.ac1.raw(weights = "linear")` |
+| `AC2_quad`   | Gwet   | quadratic  | `irrCAC::gwet.ac1.raw(weights = "quadratic")` |
 
 All `irrCAC` estimators receive `categ.labels = 1:nLevels` so unobserved
 categories in small samples cannot shrink the category space, and they all
@@ -76,17 +73,13 @@ rather than thrown, so SimDesign does **not** redraw the data on failure —
 redraws would condition results on estimability and bias the small-sample
 conditions. The NA rate is reported as the convergence rate.
 
-**Condition-dependent coefficient set.** `Analyse()` computes the full set
-in every condition (SimDesign needs consistent result names), and
-post-processing flags applicability (`coef_applicable()`); figures keep
-only applicable rows. In the current design this is straightforward: with
-`k = 2` Conger's kappa reduces exactly to **Cohen's kappa** in every
-condition, and with `nLevels ≥ 3` all weighted variants are genuinely
-distinct estimators, so everything is applicable. The machinery still
-guards the degenerate cases should the grid change again (`k > 2`: Conger
-becomes the multi-rater generalisation; `nLevels = 2`: `Kappa_quad` and
-`AC2_quad` are mathematically identical to their unweighted counterparts
-and are dropped from figures).
+**Condition-dependent coefficient set.** With `k = 2` Conger's kappa
+reduces exactly to **Cohen's kappa** in every condition, and with
+`nLevels ≥ 3` the weighted variants are genuinely distinct estimators, so
+the full set is applicable everywhere. `coef_applicable()` still guards
+the degenerate case should the grid change (`nLevels = 2`: all weighted
+variants are mathematically identical to their unweighted counterparts
+and would be dropped from figures).
 
 **Performance measures** (per condition × coefficient, with MCSE; S =
 converged replications):
@@ -118,22 +111,29 @@ results/, figs/       Generated output (git-ignored)
 
 ## Running
 
+Scripts are written to run with `R/` as the working directory:
+
 ```r
 install.packages(c("SimDesign", "IRRsim", "irr", "irrCAC",
                    "dplyr", "tidyr", "ggplot2"))
-source("R/02_run_simulation.R")  # writes results/irr_simdesign.rds (+ raw-results/)
-source("R/03_summarise.R")       # writes results/performance.rds / .csv
-source("R/04_plots.R")           # writes figs/*.png
+setwd("R")
+source("02_run_simulation.R")  # writes results/irr_simdesign.rds (+ raw-results/)
+source("03_summarise.R")       # writes results/performance.rds / .csv
+source("04_plots.R")           # writes figs/*.png
 ```
 
+`n_reps` is set to 100 for test runs; use 1000 for the final run (MCSE
+targets in the Performance measures section assume S = 1000).
+
 `runSimulation()` handles parallelisation (`parallel = TRUE`), per-condition
-seeds (`seed = 20260716 + 1:192`, so the run is fully reproducible), and
-progress/ETA reporting. If the run is interrupted, re-sourcing the script
-resumes automatically from SimDesign's tempfile. Replication-level raw
-results are stored in `results/raw-results/` (`save_results = TRUE`), the
-condition-level summary in `results/irr_simdesign.rds`, and error/warning
-bookkeeping is available via `SimExtract(res, "errors")`. `sessionInfo()`
-is saved alongside the results, per the Siepe et al. checklist.
+seeds (`seed = genSeeds(Design, iseed = 22)`, so the run is fully
+reproducible), and progress/ETA reporting. If the run is interrupted,
+re-sourcing the script resumes automatically from SimDesign's tempfile.
+Replication-level raw results are stored in `results/raw-results/`
+(`save_results = TRUE`), the condition-level summary in
+`results/irr_simdesign.rds`, and error/warning bookkeeping is available via
+`SimExtract(res, "errors")`. `sessionInfo()` is saved alongside the
+results, per the Siepe et al. checklist.
 
 ## References
 
