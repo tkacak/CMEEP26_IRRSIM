@@ -17,7 +17,7 @@ perf <- readRDS(file.path(out_dir, "performance.rds")) %>%
   filter(applicable) %>%
   mutate(coefficient = coef_name)
 
-plot_measure <- function(data, y, y_mcse, ylab, ref = 0,
+plot_measure <- function(data, y, ylab, ref = 0,
                          band = c(-0.05, 0.05)) {
   ggplot(data,
          aes(x = agree, y = .data[[y]],
@@ -25,9 +25,6 @@ plot_measure <- function(data, y, y_mcse, ylab, ref = 0,
              group = coefficient)) +
     { if (!is.null(band)) geom_hline(yintercept = band, linetype = "dotted") } +
     geom_hline(yintercept = ref, linetype = "dashed") +
-    geom_errorbar(aes(ymin = .data[[y]] - .data[[y_mcse]],
-                      ymax = .data[[y]] + .data[[y_mcse]]),
-                  width = 0.015, alpha = 0.6) +
     geom_line(linewidth = 0.6) +
     geom_point(size = 1.8) +
     facet_grid(nLevels ~ k,
@@ -47,17 +44,17 @@ for (pt in unique(perf$prob_type)) {
     tag <- sprintf("%s_n%02d", pt, ne)
 
     ggsave(file.path(fig_dir, paste0("relbias_", tag, ".png")),
-           plot_measure(d, "RelBias", "RelBias_MCSE",
+           plot_measure(d, "RelBias",
                         "Relative bias", band = c(-0.05, 0.05)),
            width = 10, height = 8, dpi = 300)
 
     ggsave(file.path(fig_dir, paste0("bias_", tag, ".png")),
-           plot_measure(d, "Bias", "Bias_MCSE", "Bias", band = NULL),
+           plot_measure(d, "Bias", "Bias", band = NULL),
            width = 10, height = 8, dpi = 300)
 
     ggsave(file.path(fig_dir, paste0("power_", tag, ".png")),
            plot_measure(d %>% filter(rejection_type == "Power"),
-                        "Rejection", "Rejection_MCSE",
+                        "Rejection",
                         "Power (H0: coefficient = 0)",
                         ref = 0.80, band = NULL),
            width = 10, height = 8, dpi = 300)
@@ -71,9 +68,6 @@ if (nrow(d0) > 0) {
                        colour = coefficient, shape = coefficient,
                        group = coefficient)) +
     geom_hline(yintercept = 0.05, linetype = "dashed") +
-    geom_errorbar(aes(ymin = Rejection - Rejection_MCSE,
-                      ymax = Rejection + Rejection_MCSE),
-                  width = 0.15, alpha = 0.6) +
     geom_line(linewidth = 0.6) +
     geom_point(size = 1.8) +
     facet_grid(nLevels ~ k + prob_type) +
