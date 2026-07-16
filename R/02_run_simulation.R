@@ -4,12 +4,12 @@
 # factorial Monte Carlo simulation.
 #
 # Design (ADEMP; see README.md):
-#   nLevels   : 2, 3, 4, 5
-#   k         : 2, 3, 4, 5 raters (all raters rate all events)
+#   nLevels   : 3, 4, 5
+#   k         : 2 raters (both raters rate all events)
 #   agree     : 0.30 ... 0.90 by 0.10 (+ 0.00 null condition for Type I)
 #   nEvents   : 20, 30, 40, 50
 #   prob_type : uniform, skew
-#   -> 1024 conditions x 1000 replications
+#   -> 192 conditions x 1000 replications
 #
 # Performance measures with analytic Monte Carlo standard errors
 # (Siepe et al., 2024; Morris, White & Crowther, 2019) are computed in
@@ -31,8 +31,8 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 # --------------------------- design grid ------------------------------
 
 Design <- createDesign(
-  nLevels   = 2:5,
-  k         = 2:5,
+  nLevels   = 3:5,
+  k         = 2,
   agree     = c(0, seq(0.30, 0.90, by = 0.10)),  # 0 = null (Type I error)
   nEvents   = c(20, 30, 40, 50),
   prob_type = c("uniform", "skew")

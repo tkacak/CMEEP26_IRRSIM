@@ -23,13 +23,13 @@ score independently from *p*. Full factorial design:
 
 | Factor      | Levels                                    |
 |-------------|-------------------------------------------|
-| `nLevels`   | 2, 3, 4, 5                                 |
-| `k` (raters)| 2, 3, 4, 5 (complete design, `k_per_event = k`) |
+| `nLevels`   | 3, 4, 5                                    |
+| `k` (raters)| 2 (both raters rate all events)            |
 | `agree`     | 0.30–0.90 by 0.10, plus 0.00 (null)        |
 | `nEvents`   | 20, 30, 40, 50                             |
 | `prob_type` | uniform; skew (*p_i ∝ i*)                  |
 
-8 × 4 × 4 × 4 × 2 = **1024 conditions**, `n_reps = 1000` replications each.
+8 × 3 × 1 × 4 × 2 = **192 conditions**, `n_reps = 1000` replications each.
 
 **Estimands / true values.** Under this DGP the pairwise joint distribution
 of any two raters' scores is
@@ -77,18 +77,16 @@ redraws would condition results on estimability and bias the small-sample
 conditions. The NA rate is reported as the convergence rate.
 
 **Condition-dependent coefficient set.** `Analyse()` computes the full set
-in every condition (SimDesign needs consistent result names), but
-post-processing flags applicability (`coef_applicable()`), and figures keep
-only applicable rows:
-
-- `k = 2`: Conger's kappa reduces exactly to **Cohen's kappa**; for `k > 2`
-  it is the multi-rater generalisation (reported alongside Fleiss' kappa).
-- `nLevels = 2`: the weighted variants (`Kappa_quad`, `AC2_quad`) are
-  mathematically identical to their unweighted counterparts, so they are
-  flagged non-applicable to avoid double-plotting the same estimator.
-  Krippendorff's ordinal alpha likewise reduces to nominal alpha at
-  `nLevels = 2` but stays applicable since no separate nominal alpha is
-  reported.
+in every condition (SimDesign needs consistent result names), and
+post-processing flags applicability (`coef_applicable()`); figures keep
+only applicable rows. In the current design this is straightforward: with
+`k = 2` Conger's kappa reduces exactly to **Cohen's kappa** in every
+condition, and with `nLevels ≥ 3` all weighted variants are genuinely
+distinct estimators, so everything is applicable. The machinery still
+guards the degenerate cases should the grid change again (`k > 2`: Conger
+becomes the multi-rater generalisation; `nLevels = 2`: `Kappa_quad` and
+`AC2_quad` are mathematically identical to their unweighted counterparts
+and are dropped from figures).
 
 **Performance measures** (per condition × coefficient, with MCSE; S =
 converged replications):
@@ -129,7 +127,7 @@ source("R/04_plots.R")           # writes figs/*.png
 ```
 
 `runSimulation()` handles parallelisation (`parallel = TRUE`), per-condition
-seeds (`seed = 20260716 + 1:1024`, so the run is fully reproducible), and
+seeds (`seed = 20260716 + 1:192`, so the run is fully reproducible), and
 progress/ETA reporting. If the run is interrupted, re-sourcing the script
 resumes automatically from SimDesign's tempfile. Replication-level raw
 results are stored in `results/raw-results/` (`save_results = TRUE`), the
